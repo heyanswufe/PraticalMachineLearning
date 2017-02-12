@@ -1,0 +1,83 @@
+---
+title: "Course Project"
+author: "Yan He"
+date: "2017年2月12日"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1.Project Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## 2.Data Process
+
+```{r, echo = T}
+library(caret)
+traindata <- read.csv('pml-training.csv', header = T)
+testdata <- read.csv('pml-testing.csv', header = T)
+```
+
+Because variables contain lots of NAs, I want to remove those variables.
+
+```{r, echo = T}
+temp <- (complete.cases(t(traindata))) 
+newtraindata <- traindata[, temp]
+dim(newtraindata)
+```
+
+Now I want to check whether there are variables which have few unique values relative to the number of samples  variables.
+
+```{r}
+nsv <- nearZeroVar(newtraindata)
+newtraindata2 <- newtraindata[,-nsv]
+```
+
+I also think some variables like ID and name have little important effect on predicting, so I choose to delete them:
+
+```{r}
+newtraindata3 <- newtraindata2[,-c(1,2,5)]
+```
+
+The same data process will be implemented on testing set:
+
+```{r}
+newtestdata <- testdata[,names(newtraindata3[1:ncol(newtraindata3)-1])]
+```
+
+## 3.Modeling 
+### Cross Validation
+At first I want to do cross validation on the whole traing data:
+```{r}
+inTrain <- createDataPartition(newtraindata3$classe, p = 0.7, list = FALSE)
+trainingset <- newtraindata3[inTrain,]
+testingset <- newtraindata3[-inTrain,]
+dim(trainingset);dim(testingset)
+```
+### Build a Random Forest Model and evaluate
+Now I choose the random forest model (from the caret package) to train the data set.In order to ensure that my computer have enough memory to compute, I enlarge the R limit to 102400(for 64-bit):
+```{r}
+memory.limit(102400)
+
+modFit <- train(classe~., method = 'rf', data = trainingset)
+modFit
+```
+### Use the model on testingset:
+```{r, results = 'asis'}
+pred <- predict(modFit, testingset)
+result <- confusionMatrix(pred, testingset$classe)
+result
+```
+From the confusionMatrix we can see the random forest model has a strong ability on classification, whose Accuracy is 0.9993.
+
+### Use Model to Predict
+We now use the trained model to predict the testdata and add the prediction to original dataset:
+```{r}
+prediction <- predict(modFit, newtestdata)
+newtestdata$Predict <- prediction
+```
